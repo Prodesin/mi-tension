@@ -2,7 +2,7 @@
  * Estrategia: stale-while-revalidate para los assets propios (sirve al instante desde
  * caché y la actualiza en segundo plano). Para publicar una versión nueva, cambia
  * CACHE_VERSION: la caché antigua se borra al activarse. */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE = `mi-tension-${CACHE_VERSION}`;
 const ASSETS = [
   './',

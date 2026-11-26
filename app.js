@@ -412,13 +412,27 @@
   }
 
   /* ================= Pestañas ================= */
-  function showTab(name) {
+  const dashMQ = window.matchMedia('(min-width: 700px)');
+  const reduceMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let currentTab = 'hoy';
+  function showTab(name, scroll = true) {
+    currentTab = name;
     $$('.tabbar button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    // En modo dashboard el CSS muestra todos los paneles; aquí solo se marca la sección activa.
     $$('.panel').forEach((p) => { p.hidden = p.id !== `panel-${name}`; });
-    window.scrollTo(0, 0);
+    if (scroll) {
+      const behavior = dashMQ.matches && !reduceMQ.matches ? 'smooth' : 'auto';
+      if (dashMQ.matches && name !== 'hoy') $(`#panel-${name}`).scrollIntoView({ behavior, block: 'start' });
+      else window.scrollTo({ top: 0, behavior });
+    }
     if (name === 'hoy' && !dateDirty) fillDateTime(formNew);
-    if (name === 'evolucion') renderChart();
+    if (name === 'evolucion' || dashMQ.matches) renderChart();
   }
+  // Al plegar/desplegar/girar el CSS redistribuye; aquí solo se sincronizan las pestañas.
+  // El formulario no se recrea, así que no se pierde lo escrito.
+  const onLayoutChange = () => showTab(currentTab, false);
+  if (dashMQ.addEventListener) dashMQ.addEventListener('change', onLayoutChange);
+  else if (dashMQ.addListener) dashMQ.addListener(onLayoutChange);
   $('.tabbar').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
     if (b) showTab(b.dataset.tab);
@@ -485,7 +499,8 @@
 
   /* ================= Inicio ================= */
   function renderToday() {
-    $('#today-label').textContent = longFmt.format(new Date());
+    const t = longFmt.format(new Date());
+    $('#today-label').textContent = t.charAt(0).toUpperCase() + t.slice(1); // «Jueves, 26 de noviembre»
   }
   loadState();
   renderToday();

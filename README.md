@@ -59,6 +59,14 @@ Vale cualquier otro hosting estático con HTTPS.
 
 Se abrirá a pantalla completa, como una app.
 
+## iPhone Duo (plegable) y otras pantallas
+
+La app se adapta sola al iPhone Duo, sin perder lo que estés escribiendo:
+- **Rail lateral derecho** (Hoy / Historial / Evolución) en pantallas casi cuadradas o anchas: pantalla exterior (~375×530), interior en vertical y horizontal. Respeta las zonas seguras (isla dinámica, indicador de estado).
+- **Dos columnas** al abrir el plegable (ancho ≥ 700 px): a la izquierda última lectura, nueva lectura y medias; a la derecha evolución e historial. Todo visible a la vez; el rail desplaza a cada zona.
+- Entre 600 y 699 px: rail lateral y una columna (las pestañas cambian de panel).
+- **iPhone normal** (alto y estrecho) y Split View estrecho: barra de pestañas abajo, un panel cada vez.
+
 ## Exportar e importar datos
 
 En **Historial → Copia de seguridad**:
@@ -88,7 +96,7 @@ En **Evolución**, elige el periodo (7 días, 30 días o Todo) y pulsa **Exporta
 
 ## Actualizar la app
 
-Tras cambiar archivos, sube el número de `CACHE_VERSION` en `sw.js` (por ejemplo `v2`) para que los dispositivos descarguen la versión nueva. Se aplica al abrir la app una o dos veces.
+Tras cambiar archivos, sube el número de `CACHE_VERSION` en `sw.js` (ahora es `v2`; la siguiente, `v3`) para que los dispositivos descarguen la versión nueva. Se aplica al abrir la app una o dos veces.
 
 ## Clasificación usada
 

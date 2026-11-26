@@ -24,6 +24,11 @@
   --c-g2: #d42a1f;
   --c-g3: #9c1030;
   --tabbar-h: 64px;
+  --rail-w: 72px;
+  /* Márgenes laterales seguros (en modo rail el lado derecho incluye el rail) */
+  --inset-l: env(safe-area-inset-left, 0px);
+  --inset-r: env(safe-area-inset-right, 0px);
+  --bar-space: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -66,23 +71,24 @@ button, input, textarea { font: inherit; color: inherit; }
 h1, h2, p { margin: 0; }
 
 #app { max-width: 600px; margin: 0 auto; min-height: 100vh; }
+@supports (min-height: 100dvh) { #app { min-height: 100dvh; } }
 
 /* ---------- Cabecera ---------- */
 .app-header {
-  padding: calc(env(safe-area-inset-top) + 14px) calc(env(safe-area-inset-right) + 20px) 6px calc(env(safe-area-inset-left) + 20px);
+  padding: calc(env(safe-area-inset-top) + 14px) calc(var(--inset-r) + 20px) 6px calc(var(--inset-l) + 20px);
 }
 .app-header h1 { font-size: 34px; line-height: 1.1; font-weight: 800; letter-spacing: -.02em; }
-.subtitle { color: var(--muted); font-size: 15px; margin-top: 2px; text-transform: capitalize; }
+.subtitle { color: var(--muted); font-size: 15px; margin-top: 2px; }
 
 main {
-  padding: 8px calc(env(safe-area-inset-right) + 16px) 0 calc(env(safe-area-inset-left) + 16px);
+  padding: 8px calc(var(--inset-r) + 16px) 0 calc(var(--inset-l) + 16px);
 }
 .panel { animation: panelIn .32s ease both; }
 @keyframes panelIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 .disclaimer {
   text-align: center; color: var(--muted); font-size: 14px;
-  padding: 8px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 24px);
+  padding: 8px calc(var(--inset-r) + 16px) calc(var(--bar-space) + 24px) calc(var(--inset-l) + 16px);
 }
 
 /* ---------- Tarjetas ---------- */
@@ -221,10 +227,10 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 
 /* ---------- Toast ---------- */
 .toast {
-  position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px); z-index: 40;
+  position: fixed; left: calc((100% + var(--inset-l) - var(--inset-r)) / 2); bottom: calc(var(--bar-space) + 16px); z-index: 40;
   transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
   background: #1c1c1e; color: #fff; padding: 13px 20px; border-radius: 999px; font-weight: 600; font-size: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .3); transition: opacity .25s, transform .25s; max-width: 90vw; text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .3); transition: opacity .25s, transform .25s; max-width: calc(100vw - var(--inset-l) - var(--inset-r) - 32px); text-align: center;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.error { background: var(--danger); }
@@ -232,13 +238,84 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 
 /* ---------- Diálogos ---------- */
 dialog {
-  width: min(92vw, 520px); max-height: 90vh; overflow: auto; border: 0; border-radius: 24px; padding: 22px;
+  width: min(92vw, 520px); max-width: calc(100vw - var(--inset-l) - var(--inset-r) - 24px);
+  margin-left: calc(var(--inset-l) + 12px); margin-right: calc(var(--inset-r) + 12px);
+  max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px); overflow: auto; border: 0; border-radius: 24px; padding: 22px;
   background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
 }
 dialog::backdrop { background: rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 dialog[open] { animation: panelIn .25s ease; }
 dialog h2 { font-size: 22px; margin-bottom: 14px; }
 dialog p { margin-bottom: 8px; }
+
+/* =====================================================================
+   iPhone Duo / pantallas casi cuadradas, anchas o plegables
+   ===================================================================== */
+
+/* 1) RAIL LATERAL DERECHO
+   - ancho >= 600px (interior del Duo, horizontal, tablets), O
+   - pantalla casi cuadrada (relación 0,65–1,60) con al menos 360px de ancho:
+     exterior del Duo en vertical (~375×530, ratio 0,71).
+   Quedan con barra inferior: iPhone alto (390×844, 0,46) y Split View estrecho. */
+@media (min-width: 600px), (min-width: 360px) and (min-aspect-ratio: 13/20) and (max-aspect-ratio: 8/5) {
+  :root {
+    --inset-r: calc(var(--rail-w) + env(safe-area-inset-right, 0px));
+    --bar-space: env(safe-area-inset-bottom, 0px);
+  }
+  #app { max-width: none; }
+  .panel { max-width: 680px; margin-left: auto; margin-right: auto; }
+  .tabbar {
+    left: auto; top: 0; bottom: 0; right: 0; width: var(--inset-r);
+    display: flex; flex-direction: column; justify-content: center; gap: 8px;
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) env(safe-area-inset-right, 0px) calc(env(safe-area-inset-bottom, 0px) + 12px) 4px;
+    border-top: 0; border-left: 1px solid var(--line);
+  }
+  .tabbar button { width: 100%; min-height: 64px; padding: 6px 2px; font-size: 11.5px; }
+  .tabbar button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* 1b) RAIL + PANTALLA ESTRECHA (exterior del Duo ~375×530): el rail de 72px
+   deja ~240px útiles, así que se compactan los números grandes y las barras. */
+@media (min-width: 360px) and (max-width: 599px) and (min-aspect-ratio: 13/20) and (max-aspect-ratio: 8/5) {
+  .big { flex-wrap: wrap; row-gap: 0; gap: 2px; }
+  .big .num { font-size: clamp(36px, 11vw, 46px); }
+  .big .slash { font-size: clamp(28px, 8.5vw, 36px); }
+  .big .unit { font-size: 14px; margin-left: 4px; }
+  .bar-head { flex-direction: column; gap: 1px; font-size: 14px; }
+  .bar-head span { overflow-wrap: anywhere; }
+}
+
+/* 3) DOS COLUMNAS (interior abierto del Duo, ~900×640 horizontal, etc.)
+   Las tres secciones visibles a la vez; el rail marca/desplaza a la zona. */
+@media (min-width: 700px) {
+  .app-header, main, .disclaimer {
+    padding-left: calc(var(--inset-l) + 24px);
+    padding-right: calc(var(--inset-r) + 24px);
+  }
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-rows: auto 1fr; column-gap: 24px; align-items: start;
+  }
+  main > .panel, main > .panel[hidden] { display: block !important; max-width: none; margin: 0; animation: none; scroll-margin-top: 12px; }
+  #panel-hoy { grid-column: 1; grid-row: 1 / span 2; }
+  #panel-evolucion { grid-column: 2; grid-row: 1; }
+  #panel-historial { grid-column: 2; grid-row: 2; }
+  /* Orden visual de la columna izquierda: última lectura, formulario, medias
+     (el DOM no cambia: latest, medias, formulario) */
+  main > #panel-hoy { display: flex !important; flex-direction: column; }
+  #panel-hoy > .latest { order: 1; }
+  #panel-hoy > .card:nth-child(3) { order: 2; } /* formulario */
+  #panel-hoy > .card:nth-child(2) { order: 3; } /* medias */
+  .evo-avg { display: none; }
+  .big .num { font-size: clamp(64px, 8vw, 96px); }
+  .big .slash { font-size: clamp(48px, 6vw, 72px); }
+}
+
+/* Pantallas bajas (horizontal): cabecera más compacta */
+@media (max-height: 520px) {
+  .app-header { padding-top: calc(env(safe-area-inset-top, 0px) + 6px); }
+  .app-header h1 { font-size: 28px; }
+}
 
 /* ---------- Informe (solo impresión) ---------- */
 #report { display: none; }
