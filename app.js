@@ -412,7 +412,7 @@
   }
 
   /* ================= Pestañas ================= */
-  const dashMQ = window.matchMedia('(min-width: 700px)');
+  const dashMQ = window.matchMedia('(min-width: 600px) and (min-height: 560px)');
   const reduceMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
   let currentTab = 'hoy';
   function showTab(name, scroll = true) {
@@ -430,6 +430,19 @@
   }
   // Al plegar/desplegar/girar el CSS redistribuye; aquí solo se sincronizan las pestañas.
   // El formulario no se recrea, así que no se pierde lo escrito.
+  // Lado del rail: si la safe area grande está a la izquierda (cámara de ese lado), el rail va a la izquierda.
+  const probe = document.createElement('div');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;width:0;height:0;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)';
+  document.body.appendChild(probe);
+  function syncRailSide() {
+    const cs = getComputedStyle(probe);
+    const l = parseFloat(cs.paddingLeft) || 0, r = parseFloat(cs.paddingRight) || 0;
+    document.documentElement.dataset.rail = l > r ? 'left' : 'right';
+  }
+  syncRailSide();
+  window.addEventListener('resize', syncRailSide);
+  window.addEventListener('orientationchange', syncRailSide);
   const onLayoutChange = () => showTab(currentTab, false);
   if (dashMQ.addEventListener) dashMQ.addEventListener('change', onLayoutChange);
   else if (dashMQ.addListener) dashMQ.addListener(onLayoutChange);

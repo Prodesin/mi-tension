@@ -24,10 +24,14 @@
   --c-g2: #d42a1f;
   --c-g3: #9c1030;
   --tabbar-h: 64px;
-  --rail-w: 72px;
-  /* Márgenes laterales seguros (en modo rail el lado derecho incluye el rail) */
+  --rail-w: 84px;      /* franja vertical del sistema en el Duo */
+  --gap: 14px;
+  /* Insets laterales. En modo rail, el lado del rail vale max(84px, env()):
+     el rail OCUPA la franja del sistema, nunca se suma a env(). */
   --inset-l: env(safe-area-inset-left, 0px);
   --inset-r: env(safe-area-inset-right, 0px);
+  --pad-l: 16px;       /* aire extra respecto al inset (0 junto al rail) */
+  --pad-r: 16px;
   --bar-space: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
 }
 @media (prefers-color-scheme: dark) {
@@ -75,20 +79,20 @@ h1, h2, p { margin: 0; }
 
 /* ---------- Cabecera ---------- */
 .app-header {
-  padding: calc(env(safe-area-inset-top) + 14px) calc(var(--inset-r) + 20px) 6px calc(var(--inset-l) + 20px);
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) calc(var(--inset-r) + var(--pad-r)) 6px calc(var(--inset-l) + var(--pad-l));
 }
 .app-header h1 { font-size: 34px; line-height: 1.1; font-weight: 800; letter-spacing: -.02em; }
 .subtitle { color: var(--muted); font-size: 15px; margin-top: 2px; }
 
 main {
-  padding: 8px calc(var(--inset-r) + 16px) 0 calc(var(--inset-l) + 16px);
+  padding: 8px calc(var(--inset-r) + var(--pad-r)) 0 calc(var(--inset-l) + var(--pad-l));
 }
 .panel { animation: panelIn .32s ease both; }
 @keyframes panelIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 .disclaimer {
   text-align: center; color: var(--muted); font-size: 14px;
-  padding: 8px calc(var(--inset-r) + 16px) calc(var(--bar-space) + 24px) calc(var(--inset-l) + 16px);
+  padding: 8px calc(var(--inset-r) + var(--pad-r)) calc(var(--bar-space) + 24px) calc(var(--inset-l) + var(--pad-l));
 }
 
 /* ---------- Tarjetas ---------- */
@@ -209,7 +213,7 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
   display: grid; grid-template-columns: repeat(3, 1fr);
-  padding: 6px calc(env(safe-area-inset-right) + 8px) env(safe-area-inset-bottom) calc(env(safe-area-inset-left) + 8px);
+  padding: 6px calc(env(safe-area-inset-right, 0px) + 8px) env(safe-area-inset-bottom, 0px) calc(env(safe-area-inset-left, 0px) + 8px);
   background: color-mix(in srgb, var(--card) 85%, transparent);
   -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
   border-top: 1px solid var(--line);
@@ -217,7 +221,7 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .tabbar button {
   min-height: 52px; min-width: 44px; border: 0; background: none; border-radius: 14px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--muted); font-size: 12px; font-weight: 700; transition: color .2s, transform .15s;
+  color: var(--muted); font-size: 12px; font-weight: 700; transition: color .2s, transform .15s, background .2s;
 }
 .tabbar button svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .25s; }
 .tabbar button[aria-selected="true"] { color: var(--accent); }
@@ -249,72 +253,141 @@ dialog h2 { font-size: 22px; margin-bottom: 14px; }
 dialog p { margin-bottom: 8px; }
 
 /* =====================================================================
-   iPhone Duo / pantallas casi cuadradas, anchas o plegables
+   iPhone Duo / pantallas plegables — viewports reales (pt = CSS px)
+     exterior vertical   466×678  compacto×regular  rail 84 a la derecha
+     exterior horizontal 678×466  compacto×compacto rail 84 (lado de la cámara)
+     interior apaisado   951×669  regular×regular   rail 84 + 2 columnas
+     interior vertical   669×951  regular×regular   tab bar abajo + 2 columnas
+     iPhone 390×844 y Split View < 430 px: tab bar abajo, 1 columna
+   Dos layouts base (compacto / regular); al cambiar, el layout se expande.
+   Rail = ocupa la franja de 84 pt: max(84px, env(safe-area-inset-<lado>)).
+   NUNCA se suma al safe-area (evita el doble inset).
    ===================================================================== */
 
-/* 1) RAIL LATERAL DERECHO
-   - ancho >= 600px (interior del Duo, horizontal, tablets), O
-   - pantalla casi cuadrada (relación 0,65–1,60) con al menos 360px de ancho:
-     exterior del Duo en vertical (~375×530, ratio 0,71).
-   Quedan con barra inferior: iPhone alto (390×844, 0,46) y Split View estrecho. */
-@media (min-width: 600px), (min-width: 360px) and (min-aspect-ratio: 13/20) and (max-aspect-ratio: 8/5) {
+/* ---- 1) RAIL LATERAL: exterior vertical, horizontal bajo, interior apaisado ---- */
+@media (min-width: 430px) and (max-width: 599px) and (min-aspect-ratio: 3/5),
+       (min-aspect-ratio: 1/1) and (max-height: 559px),
+       (min-width: 600px) and (min-height: 560px) and (min-aspect-ratio: 1/1) {
   :root {
-    --inset-r: calc(var(--rail-w) + env(safe-area-inset-right, 0px));
+    --rail-r: max(var(--rail-w), env(safe-area-inset-right, 0px));
+    --rail-l: max(var(--rail-w), env(safe-area-inset-left, 0px));
+    --inset-r: var(--rail-r);
+    --inset-l: env(safe-area-inset-left, 0px);
     --bar-space: env(safe-area-inset-bottom, 0px);
+    --pad-r: 0px;
+    --pad-l: var(--gap);
   }
-  #app { max-width: none; }
-  .panel { max-width: 680px; margin-left: auto; margin-right: auto; }
+  /* cámara a la izquierda (giro): rail a la izquierda */
+  :root[data-rail="left"] {
+    --inset-l: var(--rail-l);
+    --inset-r: env(safe-area-inset-right, 0px);
+    --pad-l: 0px;
+    --pad-r: var(--gap);
+  }
   .tabbar {
-    left: auto; top: 0; bottom: 0; right: 0; width: var(--inset-r);
-    display: flex; flex-direction: column; justify-content: center; gap: 8px;
-    padding: calc(env(safe-area-inset-top, 0px) + 12px) env(safe-area-inset-right, 0px) calc(env(safe-area-inset-bottom, 0px) + 12px) 4px;
+    left: auto; right: 0; top: 0; bottom: 0; width: var(--rail-r);
+    display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px;
+    /* ~56 pt libres arriba para reloj/cámara */
+    padding: max(56px, env(safe-area-inset-top, 0px)) 10px calc(env(safe-area-inset-bottom, 0px) + 12px) 10px;
     border-top: 0; border-left: 1px solid var(--line);
   }
-  .tabbar button { width: 100%; min-height: 64px; padding: 6px 2px; font-size: 11.5px; }
-  .tabbar button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  :root[data-rail="left"] .tabbar { right: auto; left: 0; width: var(--rail-l); border-left: 0; border-right: 1px solid var(--line); }
+  .tabbar button { width: 64px; flex: none; min-height: 60px; padding: 6px 2px; font-size: 11px; gap: 3px; border-radius: 16px; }
+  .tabbar button svg { width: 24px; height: 24px; }
+  .tabbar button span { max-width: 100%; white-space: nowrap; letter-spacing: -.01em; }
+  .tabbar button[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .tabbar button[aria-selected="true"] svg { transform: none; }
 }
 
-/* 1b) RAIL + PANTALLA ESTRECHA (exterior del Duo ~375×530): el rail de 72px
-   deja ~240px útiles, así que se compactan los números grandes y las barras. */
-@media (min-width: 360px) and (max-width: 599px) and (min-aspect-ratio: 13/20) and (max-aspect-ratio: 8/5) {
-  .big { flex-wrap: wrap; row-gap: 0; gap: 2px; }
-  .big .num { font-size: clamp(36px, 11vw, 46px); }
-  .big .slash { font-size: clamp(28px, 8.5vw, 36px); }
-  .big .unit { font-size: 14px; margin-left: 4px; }
-  .bar-head { flex-direction: column; gap: 1px; font-size: 14px; }
-  .bar-head span { overflow-wrap: anywhere; }
+/* ---- 2) RAIL COMPACTO: una columna que llena los ~382 px útiles ---- */
+@media (min-width: 430px) and (max-width: 599px) and (min-aspect-ratio: 3/5),
+       (min-aspect-ratio: 1/1) and (max-height: 559px) {
+  #app { max-width: none; }
+  .app-header { padding-top: calc(env(safe-area-inset-top, 0px) + 6px); padding-bottom: 2px; }
+  .app-header h1 { font-size: 26px; }
+  .subtitle { font-size: 14px; margin-top: 0; }
+  main { padding-top: 6px; }
+  main > #panel-hoy:not([hidden]) { display: flex; flex-direction: column; }
+  /* orden: última lectura, formulario, medias (el DOM no cambia) */
+  #panel-hoy > .latest { order: 1; }
+  #panel-hoy > .card:nth-child(3) { order: 2; }
+  #panel-hoy > .card:nth-child(2) { order: 3; }
+  .card { padding: 14px; margin-bottom: 10px; border-radius: 18px; }
+  .card h2 { font-size: 18px; margin-bottom: 8px; }
+  .latest { container-type: inline-size; }
+  .big { flex-wrap: wrap; justify-content: center; column-gap: 3px; margin: 6px 0 0; }
+  .big .num { font-size: clamp(44px, 20cqw, 72px); }
+  .big .slash { font-size: clamp(32px, 14cqw, 52px); }
+  .big .unit { font-size: 15px; margin-left: 4px; }
+  .meta { font-size: 14px; margin-bottom: 8px; }
+  .bars { gap: 8px; }
+  .bar-head { font-size: 13px; margin-bottom: 3px; gap: 8px; }
+  .bar-head span:first-child { flex: none; }
+  .bar-head span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+  .track { height: 12px; }
+  .pill { font-size: 13px; padding: 3px 10px 3px 8px; }
+  .reading-form { gap: 10px; }
+  .row3, .row2 { gap: 8px; }
+  .field { gap: 4px; }
+  .field > span { font-size: 14px; }
+  input[type="text"], input[type="date"], input[type="time"], textarea { min-height: 46px; padding: 6px 10px; border-radius: 12px; font-size: 16px; }
+  input.num-in { font-size: 24px; }
+  textarea { min-height: 52px; }
+  .btn { min-height: 48px; font-size: 17px; }
+  .avg-grid { gap: 8px; }
+  .avg { padding: 10px; border-radius: 14px; }
+  .avg .v { font-size: 24px; }
+  .avg .p, .avg .n { font-size: 13px; }
+  .row { padding: 12px; border-radius: 16px; }
+  .row-vals { font-size: 24px; }
+  .disclaimer { font-size: 13px; padding-bottom: calc(var(--bar-space) + 14px); }
 }
 
-/* 3) DOS COLUMNAS (interior abierto del Duo, ~900×640 horizontal, etc.)
-   Las tres secciones visibles a la vez; el rail marca/desplaza a la zona. */
-@media (min-width: 700px) {
-  .app-header, main, .disclaimer {
-    padding-left: calc(var(--inset-l) + 24px);
-    padding-right: calc(var(--inset-r) + 24px);
-  }
+/* ---- 3) REGULAR (interior): todo el ancho, dos columnas, sin max-width ---- */
+@media (min-width: 600px) and (min-height: 560px) {
+  #app { max-width: none; }
   main {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    grid-template-rows: auto 1fr; column-gap: 24px; align-items: start;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    grid-template-rows: auto 1fr; column-gap: 16px; align-items: start;
   }
-  main > .panel, main > .panel[hidden] { display: block !important; max-width: none; margin: 0; animation: none; scroll-margin-top: 12px; }
+  main > .panel, main > .panel[hidden] { display: block !important; max-width: none; margin: 0; animation: none; scroll-margin-top: 12px; min-width: 0; }
   #panel-hoy { grid-column: 1; grid-row: 1 / span 2; }
   #panel-evolucion { grid-column: 2; grid-row: 1; }
   #panel-historial { grid-column: 2; grid-row: 2; }
-  /* Orden visual de la columna izquierda: última lectura, formulario, medias
-     (el DOM no cambia: latest, medias, formulario) */
+  /* izquierda: última lectura, formulario, medias (el DOM no cambia) */
   main > #panel-hoy { display: flex !important; flex-direction: column; }
   #panel-hoy > .latest { order: 1; }
-  #panel-hoy > .card:nth-child(3) { order: 2; } /* formulario */
-  #panel-hoy > .card:nth-child(2) { order: 3; } /* medias */
+  #panel-hoy > .card:nth-child(3) { order: 2; }
+  #panel-hoy > .card:nth-child(2) { order: 3; }
   .evo-avg { display: none; }
-  .big .num { font-size: clamp(64px, 8vw, 96px); }
-  .big .slash { font-size: clamp(48px, 6vw, 72px); }
+  .latest { container-type: inline-size; }
+  .big { flex-wrap: wrap; justify-content: center; }
+  .big .num { font-size: clamp(48px, 19cqw, 88px); }
+  .big .slash { font-size: clamp(36px, 14cqw, 64px); }
+  .bar-head { gap: 8px; }
+  .bar-head span:last-child { text-align: right; }
 }
 
-/* Pantallas bajas (horizontal): cabecera más compacta */
+/* Tarjeta de última lectura estrecha: etiquetas de barra apiladas, sin partir frases */
+@container (max-width: 320px) {
+  .bar-head { flex-direction: column; align-items: flex-start; gap: 1px; }
+  .bar-head span { white-space: nowrap; }
+  .bar-head span:last-child { text-align: left; }
+}
+
+/* Exterior horizontal (poca altura): última lectura más compacta */
+@media (min-aspect-ratio: 1/1) and (max-height: 520px) {
+  .latest { padding-top: 10px; padding-bottom: 10px; margin-bottom: 8px; }
+  .big { margin-top: 2px; }
+  .big .num { font-size: clamp(40px, 17cqw, 60px); }
+  .big .slash { font-size: clamp(28px, 12cqw, 44px); }
+  .meta { margin-bottom: 4px; }
+  .bars { gap: 6px; }
+}
+
+/* Pantallas bajas sin rail: cabecera más compacta */
 @media (max-height: 520px) {
-  .app-header { padding-top: calc(env(safe-area-inset-top, 0px) + 6px); }
-  .app-header h1 { font-size: 28px; }
+  .app-header h1 { font-size: 26px; }
 }
 
 /* ---------- Informe (solo impresión) ---------- */

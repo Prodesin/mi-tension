@@ -61,11 +61,21 @@ Se abrirá a pantalla completa, como una app.
 
 ## iPhone Duo (plegable) y otras pantallas
 
-La app se adapta sola al iPhone Duo, sin perder lo que estés escribiendo:
-- **Rail lateral derecho** (Hoy / Historial / Evolución) en pantallas casi cuadradas o anchas: pantalla exterior (~375×530), interior en vertical y horizontal. Respeta las zonas seguras (isla dinámica, indicador de estado).
-- **Dos columnas** al abrir el plegable (ancho ≥ 700 px): a la izquierda última lectura, nueva lectura y medias; a la derecha evolución e historial. Todo visible a la vez; el rail desplaza a cada zona.
-- Entre 600 y 699 px: rail lateral y una columna (las pestañas cambian de panel).
-- **iPhone normal** (alto y estrecho) y Split View estrecho: barra de pestañas abajo, un panel cada vez.
+Medidas reales (puntos = px CSS, escala 3x; simulador iOS 27.1 y kit Figma iOS 27):
+
+| Pantalla | Viewport | Navegación | Contenido |
+|---|---|---|---|
+| iPhone normal | 390×844 | tab bar abajo | 1 columna |
+| Exterior vertical | 466×678 | rail 84 px a la derecha | 1 columna compacta, 382 px útiles |
+| Exterior horizontal | 678×466 | rail 84 px (lado de la cámara) | 1 columna compacta |
+| Interior apaisado (al abrir) | 951×669 | rail 84 px | 2 columnas: lectura + formulario + medias, gráfico + historial |
+| Interior vertical | 669×951 | tab bar abajo (sin rail) | 2 columnas a todo el ancho |
+| Split View estrecho | < 430 px | tab bar abajo | 1 columna |
+
+- **Rail**: ocupa la franja de 84 pt del sistema, `max(84px, env(safe-area-inset-<lado>))`, y **no se suma** al safe area. Pestañas abajo y ~56 px libres arriba para reloj/cámara. En horizontal va al lado donde esté el safe area grande (sondeo de `env()` → `data-rail`).
+- **Sin huecos**: no hay `max-width` centrado; el contenido usa todo el ancho (14–16 px al borde libre, 0 junto al rail). El fondo llega al borde.
+- Dos layouts base (compacto / regular): al plegar, abrir o girar el layout se expande y no se pierde lo escrito (el formulario no se recrea).
+- Safe areas independientes por lado en cabecera, contenido, rail, tab bar, toasts y diálogos.
 
 ## Exportar e importar datos
 
@@ -96,7 +106,7 @@ En **Evolución**, elige el periodo (7 días, 30 días o Todo) y pulsa **Exporta
 
 ## Actualizar la app
 
-Tras cambiar archivos, sube el número de `CACHE_VERSION` en `sw.js` (ahora es `v2`; la siguiente, `v3`) para que los dispositivos descarguen la versión nueva. Se aplica al abrir la app una o dos veces.
+Tras cambiar archivos, sube el número de `CACHE_VERSION` en `sw.js` (ahora es `v3`; la siguiente, `v4`) para que los dispositivos descarguen la versión nueva. Se aplica al abrir la app una o dos veces.
 
 ## Clasificación usada
 
