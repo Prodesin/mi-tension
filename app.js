@@ -1,8 +1,10 @@
-/* Mi tensión — lógica de la app. Sin dependencias. Datos solo en localStorage.
+/* Mi tensión — lógica de la app. Sin dependencias. localStorage como caché local y, si hay conexión,
+ * sincronización con el backend «Mis apps» del Mac de casa (ver sync.js).
  *
  * Formato de cada lectura (estable, también usado en exportar/importar):
  *   { id: string, datetime: "2026-11-25T13:21:00+01:00", systolic, diastolic, pulse, note }
  * El instante se guarda en ISO 8601 con el desfase real de Europe/Madrid (+01:00 / +02:00).
+ * `pulse` puede ser null (lectura sin pulso, p. ej. apuntada por Coco).
  */
 (() => {
   'use strict';
@@ -13,6 +15,11 @@
   const PATIENT = 'Jorge Rodriguez Sobreira';
   const TARGET = { sys: 130, dia: 80 };
   const DAY = 86400000;
+  const MAC_URL = 'https://air-prodesin.tail7b1127.ts.net:8445/mi-tension/';
+  const MODO = window.MTSync ? MTSync.detectarModo(location) : 'local';
+  /** «Ahora». Para pruebas y capturas se puede fijar con window.__MT_NOW (ms o ISO). */
+  const nowDate = () => (window.__MT_NOW != null ? new Date(window.__MT_NOW) : new Date());
+  const pulseText = (p) => (p == null ? '—' : String(p));
 
   // Lecturas precargadas la primera vez
   const SEED = [
@@ -64,7 +71,7 @@
     return `${dateStr}T${timeStr}:00${off >= 0 ? '+' : '-'}${pad(Math.floor(a / 60))}:${pad(a % 60)}`;
   }
   /** Valores para los inputs date/time a partir de un instante. */
-  function nowInputs(date = new Date()) {
+  function nowInputs(date = nowDate()) {
     const p = madridParts(date);
     return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
   }
@@ -95,11 +102,12 @@
     try {
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (raw && Array.isArray(raw.readings)) {
-        state = { readings: raw.readings.filter(isValidStored), seeded: !!raw.seeded };
+        state = { readings: raw.readings.filter(isValidStored).map((r) => (r.pulse === undefined ? { ...r, pulse: null } : r)), seeded: !!raw.seeded };
       }
     } catch (e) { /* datos ausentes o corruptos: se parte de cero */ }
-    // Primera vez (o sin lecturas y nunca precargado): sembrar las 8 lecturas
-    if (state.readings.length === 0 && !state.seeded) {
+    // Primera vez (o sin lecturas y nunca precargado): sembrar las 8 lecturas solo como demo sin backend.
+    // Servida desde el Mac, la app nunca siembra: los datos vienen del servidor.
+    if (MODO !== 'mac' && state.readings.length === 0 && !state.seeded) {
       state.readings = SEED.map(([d, t, s, di, p]) => ({
         id: `seed-${d}`, datetime: toISO(d, t), systolic: s, diastolic: di, pulse: p, note: ''
       }));
@@ -109,7 +117,7 @@
   }
   function isValidStored(r) {
     return r && typeof r.id === 'string' && !isNaN(new Date(r.datetime).getTime()) &&
-      Number.isFinite(r.systolic) && Number.isFinite(r.diastolic) && Number.isFinite(r.pulse);
+      Number.isFinite(r.systolic) && Number.isFinite(r.diastolic) && (r.pulse == null || Number.isFinite(r.pulse));
   }
   function persist() {
     try {
@@ -120,20 +128,52 @@
       return false;
     }
   }
+  /* ----- Sincronización con el backend (sync.js) ----- */
+  const NOOP = { sincronizar() {}, encolarPut() {}, encolarDel() {}, encolarPuts() {} };
+  const sync = window.MTSync && MODO !== 'local' ? MTSync.crear({
+    modo: MODO,
+    almacen: localStorage,
+    fetchFn: (u, o) => fetch(u, o),
+    getLecturas: () => state.readings,
+    setLecturas: (lista) => {
+      const antes = JSON.stringify(sorted(false));
+      state.readings = lista;
+      if (JSON.stringify(sorted(false)) !== antes) { state.seeded = true; persist(); renderAll(); }
+    },
+    alEstado: (e, info) => renderSyncEstado(e, info)
+  }) : NOOP;
+  function renderSyncEstado(e, info) {
+    const el = $('#sync-estado');
+    if (!el) return;
+    const n = (info && info.pendientes) || 0;
+    const txt = {
+      sincronizado: 'Sincronizado con el Mac de casa',
+      sincronizando: 'Sincronizando…',
+      pendiente: `Pendiente de enviar${n ? ` (${n})` : ''}`,
+      'sin-conexion': `Sin conexión con el Mac: se enviará al volver${n ? ` (${n} pendiente${n === 1 ? '' : 's'})` : ''}`,
+      'sin-permiso': 'El Mac no acepta escribir desde aquí: abre la app en su dirección nueva',
+      desactivado: ''
+    }[e] || '';
+    el.textContent = txt;
+    el.dataset.estado = e;
+    el.hidden = !txt;
+  }
   const sorted = (desc = true) => state.readings.slice().sort((a, b) => desc ? ts(b) - ts(a) : ts(a) - ts(b));
 
   /* ================= Validación ================= */
   function validate(v) {
     const errors = {};
     const num = (s) => (/^\d{1,3}$/.test(String(s).trim()) ? parseInt(s, 10) : NaN);
-    const sys = num(v.sys), dia = num(v.dia), pul = num(v.pul);
+    const sys = num(v.sys), dia = num(v.dia);
+    const pulVacio = String(v.pul).trim() === '';
+    const pul = pulVacio ? null : num(v.pul);
     if (isNaN(sys)) errors.sys = 'Escribe la presión alta (sistólica), solo números.';
     else if (sys < 70 || sys > 250) errors.sys = 'La alta (sistólica) debe estar entre 70 y 250 mmHg.';
     if (isNaN(dia)) errors.dia = 'Escribe la presión baja (diastólica), solo números.';
     else if (dia < 40 || dia > 150) errors.dia = 'La baja (diastólica) debe estar entre 40 y 150 mmHg.';
     if (!errors.sys && !errors.dia && sys <= dia) errors.dia = 'La alta debe ser mayor que la baja.';
-    if (isNaN(pul)) errors.pul = 'Escribe el pulso, solo números.';
-    else if (pul < 30 || pul > 200) errors.pul = 'El pulso debe estar entre 30 y 200 lpm.';
+    if (!pulVacio && isNaN(pul)) errors.pul = 'El pulso, si lo pones, solo con números.';
+    else if (!pulVacio && (pul < 30 || pul > 200)) errors.pul = 'El pulso debe estar entre 30 y 200 lpm.';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date)) errors.date = 'Indica una fecha válida.';
     if (!/^\d{2}:\d{2}$/.test(v.time)) errors.time = 'Indica una hora válida.';
     return { errors, values: { sys, dia, pul } };
@@ -191,8 +231,10 @@
     const { errors, values } = validate(v);
     showErrors(formNew, errors);
     if (Object.keys(errors).length) return;
-    state.readings.push({ id: newId(), datetime: toISO(v.date, v.time), systolic: values.sys, diastolic: values.dia, pulse: values.pul, note: v.note });
+    const nueva = { id: newId(), datetime: toISO(v.date, v.time), systolic: values.sys, diastolic: values.dia, pulse: values.pul, note: v.note };
+    state.readings.push(nueva);
     if (!persist()) { state.readings.pop(); return; }
+    sync.encolarPut(nueva); sync.sincronizar();
     formNew.elements.sys.value = formNew.elements.dia.value = formNew.elements.pul.value = formNew.elements.note.value = '';
     dateDirty = false;
     fillDateTime(formNew);
@@ -220,7 +262,7 @@
     editingId = id;
     const n = nowInputs(new Date(r.datetime));
     const f = formEdit.elements;
-    f.sys.value = r.systolic; f.dia.value = r.diastolic; f.pul.value = r.pulse;
+    f.sys.value = r.systolic; f.dia.value = r.diastolic; f.pul.value = r.pulse == null ? '' : r.pulse;
     f.date.value = n.date; f.time.value = n.time; f.note.value = r.note || '';
     showErrors(formEdit, {});
     dlgEdit.showModal();
@@ -236,6 +278,7 @@
     const backup = { ...r };
     Object.assign(r, { datetime: toISO(v.date, v.time), systolic: values.sys, diastolic: values.dia, pulse: values.pul, note: v.note });
     if (!persist()) { Object.assign(r, backup); return; }
+    sync.encolarPut(r); sync.sincronizar();
     dlgEdit.close();
     renderAll();
     toast('Cambios guardados');
@@ -248,7 +291,7 @@
     const r = state.readings.find((x) => x.id === id);
     if (!r) return;
     deletingId = id;
-    $('#dlg-del-text').textContent = `Lectura del ${fmtDate(r)} a las ${fmtTime(r)}: ${r.systolic}/${r.diastolic} mmHg, pulso ${r.pulse}.`;
+    $('#dlg-del-text').textContent = `Lectura del ${fmtDate(r)} a las ${fmtTime(r)}: ${r.systolic}/${r.diastolic} mmHg, pulso ${pulseText(r.pulse)}.`;
     dlgDel.showModal();
   }
   $('#del-cancel').addEventListener('click', () => dlgDel.close());
@@ -256,23 +299,24 @@
     const before = state.readings;
     state.readings = state.readings.filter((x) => x.id !== deletingId);
     if (!persist()) state.readings = before;
-    else toast('Lectura borrada');
+    else { sync.encolarDel(deletingId); sync.sincronizar(); toast('Lectura borrada'); }
     dlgDel.close();
     renderAll();
   });
 
   /* ================= Estadísticas ================= */
-  function windowReadings(days, now = Date.now()) {
+  function windowReadings(days, now = nowDate().getTime()) {
     return state.readings.filter((r) => { const t = ts(r); return t <= now && t > now - days * DAY; });
   }
   function averages(list) {
     if (!list.length) return null;
-    const m = (k) => Math.round(list.reduce((a, r) => a + r[k], 0) / list.length);
-    return { sys: m('systolic'), dia: m('diastolic'), pul: m('pulse'), n: list.length };
+    const m = (k, l = list) => Math.round(l.reduce((a, r) => a + r[k], 0) / l.length);
+    const conPulso = list.filter((r) => r.pulse != null);
+    return { sys: m('systolic'), dia: m('diastolic'), pul: conPulso.length ? m('pulse', conPulso) : null, n: list.length };
   }
   function avgCard(title, a) {
     if (!a) return `<div class="avg"><h3>${title}</h3><div class="v">—</div><div class="p">Sin lecturas</div></div>`;
-    return `<div class="avg"><h3>${title}</h3><div class="v">${a.sys}/${a.dia}</div><div class="p">♥ ${a.pul} lpm</div><div class="n">${a.n} ${a.n === 1 ? 'lectura' : 'lecturas'}</div></div>`;
+    return `<div class="avg"><h3>${title}</h3><div class="v">${a.sys}/${a.dia}</div><div class="p">♥ ${a.pul == null ? '—' : a.pul + ' lpm'}</div><div class="n">${a.n} ${a.n === 1 ? 'lectura' : 'lecturas'}</div></div>`;
   }
 
   /* ================= Render ================= */
@@ -295,7 +339,7 @@
     el.innerHTML = `
       <div class="top"><span class="label">Última lectura</span>${pill(last)}</div>
       <div class="big" aria-label="${last.systolic} sobre ${last.diastolic} milímetros de mercurio"><span class="num">${last.systolic}</span><span class="slash">/</span><span class="num">${last.diastolic}</span><span class="unit">mmHg</span></div>
-      <div class="meta">♥ <b>${last.pulse}</b> lpm · ${fmtDate(last)} · ${fmtTime(last)}</div>
+      <div class="meta">♥ <b>${pulseText(last.pulse)}</b>${last.pulse == null ? '' : ' lpm'} · ${fmtDate(last)} · ${fmtTime(last)}</div>
       <div class="bars">${bar('Alta', last.systolic, TARGET.sys)}${bar('Baja', last.diastolic, TARGET.dia)}</div>`;
     el.className = `card latest ${c.cls}`;
   }
@@ -310,7 +354,7 @@
     $('#history').innerHTML = list.map((r) => `
       <li class="row">
         <div class="row-top"><span class="row-date">${fmtDate(r)} · ${fmtTime(r)}</span>${pill(r)}</div>
-        <div class="row-vals">${r.systolic}/${r.diastolic} <small>mmHg · ♥ ${r.pulse} lpm</small></div>
+        <div class="row-vals">${r.systolic}/${r.diastolic} <small>mmHg · ♥ ${r.pulse == null ? '—' : r.pulse + ' lpm'}</small></div>
         ${r.note ? `<div class="row-note">${esc(r.note)}</div>` : ''}
         <div class="row-actions">
           <button type="button" data-act="edit" data-id="${esc(r.id)}" aria-label="Editar lectura del ${fmtDate(r)} a las ${fmtTime(r)}">Editar</button>
@@ -327,7 +371,7 @@
   /* ----- Gráfico SVG ----- */
   let range = 30; // días; 0 = todo
   function rangeReadings() {
-    const now = Date.now();
+    const now = nowDate().getTime();
     return sorted(false).filter((r) => ts(r) <= now && (range === 0 || ts(r) > now - range * DAY));
   }
   function renderChart() {
@@ -365,7 +409,7 @@
     const pts = (k) => data.map((r) => `${x(ts(r)).toFixed(1)},${y(r[k]).toFixed(1)}`).join(' ');
     svg += `<polyline class="ln ln-sys" points="${pts('systolic')}"/><polyline class="ln ln-dia" points="${pts('diastolic')}"/>`;
     for (const r of data) {
-      const cx = x(ts(r)), tip = `${fmtDate(r)} ${fmtTime(r)}: ${r.systolic}/${r.diastolic}, pulso ${r.pulse}`;
+      const cx = x(ts(r)), tip = `${fmtDate(r)} ${fmtTime(r)}: ${r.systolic}/${r.diastolic}, pulso ${pulseText(r.pulse)}`;
       svg += `<circle class="pt-sys" cx="${cx}" cy="${y(r.systolic)}" r="5"><title>${tip}</title></circle>`;
       svg += `<rect class="pt-dia" x="${cx - 4.5}" y="${y(r.diastolic) - 4.5}" width="9" height="9" rx="2"><title>${tip}</title></rect>`;
     }
@@ -375,14 +419,14 @@
   /* ----- Informe imprimible ----- */
   function renderReport() {
     const data = rangeReadings();
-    const avgRow = (label, a) => `<tr><th>${label}</th><td class="num">${a ? a.sys : '—'}</td><td class="num">${a ? a.dia : '—'}</td><td class="num">${a ? a.pul : '—'}</td><td class="num">${a ? a.n : 0}</td></tr>`;
+    const avgRow = (label, a) => `<tr><th>${label}</th><td class="num">${a ? a.sys : '—'}</td><td class="num">${a ? a.dia : '—'}</td><td class="num">${a && a.pul != null ? a.pul : '—'}</td><td class="num">${a ? a.n : 0}</td></tr>`;
     const label = range === 0 ? 'todas las lecturas' : `últimos ${range} días`;
     const period = data.length ? `Del ${fmtDate(data[0])} al ${fmtDate(data[data.length - 1])} (${label}; ${data.length} lecturas)` : `Sin lecturas (${label})`;
     $('#report').innerHTML = `
       <h1>Informe de tensión arterial</h1>
       <p><strong>Nombre:</strong> ${esc(PATIENT)}</p>
       <p><strong>Periodo:</strong> ${esc(period)}</p>
-      <p><strong>Generado:</strong> ${dateFmt.format(new Date())} ${timeFmt.format(new Date())} (hora de Madrid)</p>
+      <p><strong>Generado:</strong> ${dateFmt.format(nowDate())} ${timeFmt.format(nowDate())} (hora de Madrid)</p>
       <h2>Medias (mmHg / lpm)</h2>
       <table class="avgs"><thead><tr><th></th><th>Sistólica</th><th>Diastólica</th><th>Pulso</th><th>Lecturas</th></tr></thead><tbody>
         ${avgRow('Últimos 7 días', averages(windowReadings(7)))}
@@ -392,7 +436,7 @@
       <p style="margin-top:2mm">Objetivo: sistólica &lt; 130 y diastólica &lt; 80 mmHg.</p>
       <h2>Lecturas</h2>
       <table><thead><tr><th>Fecha</th><th>Hora</th><th>Sistólica</th><th>Diastólica</th><th>Pulso</th><th>Clasificación</th><th>Nota</th></tr></thead><tbody>
-        ${data.map((r) => `<tr><td>${fmtDate(r)}</td><td>${fmtTime(r)}</td><td class="num">${r.systolic}</td><td class="num">${r.diastolic}</td><td class="num">${r.pulse}</td><td>${classify(r.systolic, r.diastolic).label}</td><td>${esc(r.note || '')}</td></tr>`).join('') || '<tr><td colspan="7">Sin lecturas</td></tr>'}
+        ${data.map((r) => `<tr><td>${fmtDate(r)}</td><td>${fmtTime(r)}</td><td class="num">${r.systolic}</td><td class="num">${r.diastolic}</td><td class="num">${pulseText(r.pulse)}</td><td>${classify(r.systolic, r.diastolic).label}</td><td>${esc(r.note || '')}</td></tr>`).join('') || '<tr><td colspan="7">Sin lecturas</td></tr>'}
       </tbody></table>
       <p class="notice">Orientativo: no sustituye a tu médico.</p>`;
   }
@@ -407,7 +451,33 @@
     renderChart();
   });
 
+  /* ----- Aviso «aún no te la has tomado» (Europe/Madrid) ----- */
+  function renderAviso() {
+    const el = $('#aviso-toma');
+    if (!el) return;
+    const ahora = nowDate();
+    const hoy = nowInputs(ahora).date;
+    if (state.readings.some((r) => nowInputs(new Date(r.datetime)).date === hoy)) { el.hidden = true; el.innerHTML = ''; return; }
+    const p = madridParts(ahora);
+    const min = (+p.hour) * 60 + (+p.minute);
+    const [cls, msg] = min < 13 * 60 + 30 ? ['soft', 'Hoy toca antes de comer.']
+      : min < 16 * 60 ? ['urgent', 'Es la hora: tómatela antes de comer.']
+      : ['soft', 'Hoy aún no la has apuntado. Si te la tomaste, apúntala; si no, mañana antes de comer.'];
+    el.hidden = false;
+    el.className = `notice ${cls}`;
+    el.textContent = msg;
+  }
+
+  /* ----- Banner de mudanza (solo en GitHub Pages) ----- */
+  function initBanner() {
+    const b = $('#banner-mudanza');
+    if (!b || MODO !== 'pages') return;
+    b.hidden = false;
+    $('#banner-ok').addEventListener('click', () => { b.hidden = true; });
+  }
+
   function renderAll() {
+    renderAviso();
     renderLatest(); renderAverages(); renderHistory(); renderChart();
   }
 
@@ -489,20 +559,23 @@
       const incoming = Array.isArray(data) ? data : data && data.readings;
       if (!Array.isArray(incoming)) throw new Error('formato');
       let added = 0, updated = 0, skipped = 0;
+      const tocadas = [];
       for (const item of incoming) {
         const r = {
           id: typeof item.id === 'string' && item.id ? item.id : newId(),
           datetime: item.datetime, systolic: Number(item.systolic), diastolic: Number(item.diastolic),
-          pulse: Number(item.pulse), note: typeof item.note === 'string' ? item.note.slice(0, 300) : ''
+          pulse: item.pulse == null || item.pulse === '' ? null : Number(item.pulse), note: typeof item.note === 'string' ? item.note.slice(0, 300) : ''
         };
         const ok = isValidStored(r) && r.systolic >= 70 && r.systolic <= 250 && r.diastolic >= 40 && r.diastolic <= 150 &&
-          r.systolic > r.diastolic && r.pulse >= 30 && r.pulse <= 200;
+          r.systolic > r.diastolic && (r.pulse === null || (r.pulse >= 30 && r.pulse <= 200));
         if (!ok) { skipped++; continue; }
         const i = state.readings.findIndex((x) => x.id === r.id);
         if (i >= 0) { state.readings[i] = r; updated++; } else { state.readings.push(r); added++; }
+        tocadas.push(r);
       }
       state.seeded = true;
       persist();
+      if (tocadas.length) { sync.encolarPuts(tocadas); sync.sincronizar(); }
       renderAll();
       toast(`Importadas ${added} nuevas, ${updated} actualizadas` + (skipped ? `, ${skipped} omitidas` : ''), false);
     } catch (err) {
@@ -512,14 +585,19 @@
 
   /* ================= Inicio ================= */
   function renderToday() {
-    const t = longFmt.format(new Date());
+    const t = longFmt.format(nowDate());
     $('#today-label').textContent = t.charAt(0).toUpperCase() + t.slice(1); // «Jueves, 26 de noviembre»
   }
   loadState();
   renderToday();
   renderAll();
+  initBanner();
+  sync.sincronizar();
+  window.addEventListener('online', () => sync.sincronizar());
+  setInterval(() => { if (document.visibilityState === 'visible') { sync.sincronizar(); renderAviso(); } }, 60000);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      sync.sincronizar();
       renderToday(); renderAll();
       if (!dateDirty) fillDateTime(formNew);
     }

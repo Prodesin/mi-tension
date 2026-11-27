@@ -24,11 +24,20 @@
     <header class="app-header">
       <h1>Mi tensión</h1>
       <p id="today-label" class="subtitle"></p>
+      <p id="sync-estado" class="sync" role="status" hidden></p>
     </header>
 
     <main>
       <!-- ================= HOY ================= -->
       <section id="panel-hoy" class="panel" role="tabpanel" aria-labelledby="tab-hoy">
+        <article class="card banner-mudanza" id="banner-mudanza" hidden>
+          <h2>Mi tensión se ha mudado al Mac de casa</h2>
+          <p class="hint">Abre <a href="https://air-prodesin.tail7b1127.ts.net:8445/mi-tension/">air-prodesin.tail7b1127.ts.net:8445</a> en Safari, con Tailscale activado, y vuelve a añadirla a la pantalla de inicio. Abre esta versión una vez con Tailscale para subir lo que ya tienes. No borres este icono hasta ver tus lecturas en la nueva.</p>
+          <div class="btn-row"><button type="button" class="btn secondary" id="banner-ok">Ahora no</button><a class="btn primary" href="https://air-prodesin.tail7b1127.ts.net:8445/mi-tension/">Abrir la nueva</a></div>
+        </article>
+
+        <div id="aviso-toma" class="notice soft" role="status" hidden></div>
+
         <article class="card latest" id="latest" aria-live="polite"></article>
 
         <article class="card">
@@ -49,7 +58,7 @@
 
         <article class="card">
           <h2>Copia de seguridad</h2>
-          <p class="hint">Tus datos solo están en este dispositivo. Guarda una copia de vez en cuando.</p>
+          <p class="hint">Tus lecturas se guardan en este dispositivo y, cuando hay conexión, también en el Mac de casa. Guarda una copia de vez en cuando.</p>
           <div class="btn-row">
             <button type="button" class="btn secondary" id="btn-export">Exportar datos</button>
             <button type="button" class="btn secondary" id="btn-import">Importar datos</button>
@@ -126,6 +135,7 @@
   <!-- Informe para imprimir / PDF (solo visible al imprimir) -->
   <section id="report" aria-hidden="true"></section>
 
+  <script src="sync.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # Mi tensión
 
-App web instalable (PWA) para registrar la tensión arterial, pensada para Jorge Rodriguez Sobreira. Todo en español, sin backend, sin dependencias: solo HTML, CSS y JavaScript.
+App web instalable (PWA) para registrar la tensión arterial, pensada para Jorge Rodriguez Sobreira. Todo en español, sin dependencias: solo HTML, CSS y JavaScript. Desde la mudanza al Mac de casa sincroniza con el backend **Mis apps** (`/workspace/mis-apps`); sin conexión sigue funcionando con su caché local.
 
 > **Orientativo: no sustituye a tu médico.** La clasificación (criterios ESC/ESH) es solo una ayuda visual.
 
@@ -10,15 +10,29 @@ App web instalable (PWA) para registrar la tensión arterial, pensada para Jorge
 - **Historial**: todas las lecturas, con editar y borrar (con confirmación). Aquí también están exportar e importar.
 - **Evolución**: gráfico de sistólica y diastólica con líneas objetivo, medias y botón «Exportar PDF».
 - Funciona sin conexión y se adapta al modo claro y oscuro del iPhone.
-- La primera vez que se abre se precargan 8 lecturas (18–25 nov 2026). Solo ocurre una vez.
+- **Aviso de la toma** (en Hoy, si no hay lectura de hoy, hora de Madrid): antes de las 13:30 suave («Hoy toca antes de comer.»), de 13:30 a 16:00 más visible («Es la hora: tómatela antes de comer.») y después suave («Hoy aún no la has apuntado…»).
+- El **pulso es opcional** (Coco puede apuntar una medida sin él): se muestra «—» y no cuenta en las medias.
+- Solo en la demo local sin backend (GitHub Pages sin red o `file://`) se precargan 8 lecturas de ejemplo (18–25 nov 2026). Servida desde el Mac, la app **no siembra nada**: lee del servidor.
 
-Los datos se guardan **solo en el `localStorage` del dispositivo**. Borrar los datos de Safari o desinstalar la app los elimina: haz copias de seguridad.
+## Dónde viven los datos (mudanza al Mac de casa)
+
+Los datos **ya no viven solo en el teléfono**: la copia de referencia está en el Mac de casa (`https://air-prodesin.tail7b1127.ts.net:8445/mi-tension/`, solo con Tailscale) y el `localStorage` del dispositivo es una caché. Coco apunta medidas con `~/mi-tension/anadir.sh SIS DIA [PULSO] [NOTA]` en el Mac y aparecen en la app al sincronizar.
+
+- **Sincronización** (`sync.js`): al abrir, al volver la red, al volver a la app y cada minuto se envían los cambios pendientes y se baja lo del servidor. Se fusiona sin duplicar: misma `id` = misma lectura; mismo minuto y mismos valores con otra `id` = la misma lectura (se queda la más completa).
+- **Cola sin conexión** (`mi-tension:cola`): altas, ediciones y borrados hechos sin red se guardan y se envían al volver. Debajo del título se ve el estado («Sincronizado con el Mac de casa», «Sin conexión con el Mac: se enviará al volver (n pendientes)»).
+- **Migración desde el `localStorage` antiguo**: la primera vez que esta versión se abre con el Mac alcanzable (iPhone con Tailscale), sube todo lo que hay en el dispositivo (upsert sin duplicar) y deja la marca `mi-tension:migrado`. Un cambio posterior se sincroniza por la cola. Si no hubo red, se reintenta; no se pierde nada.
+- **Origen antiguo (GitHub Pages)**: muestra un **aviso de mudanza** con el enlace nuevo. Debe abrirse **una vez con Tailscale** para subir lo que ya tienes, y no conviene borrar el icono antiguo hasta ver las lecturas en la nueva. Desde Pages solo se pueden **subir** lecturas (alta/edición); los borrados se hacen en la versión del Mac (en Pages se quedan en local).
+- **Mismo código en los dos sitios**: `app.js` y `sync.js` detectan dónde están (`github.io` → API absoluta de Tailscale; servida por Mis apps → `/api/...` relativo, con cookie de sesión httpOnly, sin token en el JS). `/workspace/mis-apps/scripts/sincronizar-apps.sh` copia estos ficheros a `mis-apps/apps/mi-tension/`; este repositorio es la fuente de verdad.
+- Para pruebas y capturas se puede fijar «ahora» con `window.__MT_NOW` (ms o fecha ISO).
+
+Exportar/importar JSON se mantiene igual (el servidor también exporta: `/api/mi-tension/exportar`). Haz copias de vez en cuando: el Mac hace una diaria a las 04:45.
 
 ## Archivos
 
 | Archivo | Función |
 |---|---|
 | `index.html`, `styles.css`, `app.js` | La app |
+| `sync.js` | Sincronización con el backend, fusión y cola sin conexión (se prueba con Node en `mis-apps/tests`) |
 | `manifest.webmanifest` | Datos de instalación (PWA) |
 | `sw.js` | Service worker (modo sin conexión) |
 | `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | Iconos |
@@ -106,7 +120,7 @@ En **Evolución**, elige el periodo (7 días, 30 días o Todo) y pulsa **Exporta
 
 ## Actualizar la app
 
-Tras cambiar archivos, sube el número de `CACHE_VERSION` en `sw.js` (ahora es `v3`; la siguiente, `v4`) para que los dispositivos descarguen la versión nueva. Se aplica al abrir la app una o dos veces.
+Tras cambiar archivos, sube el número de `CACHE_VERSION` en `sw.js` (ahora es `v4`; la siguiente, `v5`) para que los dispositivos descarguen la versión nueva. Se aplica al abrir la app una o dos veces. El service worker no cachea nunca `/api/*`.
 
 ## Clasificación usada
 
